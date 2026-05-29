@@ -273,18 +273,12 @@ header{
 .screen-title-area h2{font-size:1.35rem;font-weight:700;letter-spacing:-.02em;color:var(--text)}
 .empty-state p{font-size:.8rem;color:var(--muted);line-height:1.6;margin-top:6px}
 
-/* ── Comment overlay — full-screen fixed, card is absolute inside ── */
-#commentOverlay{
-  display:none;
-  position:fixed;
-  inset:0;
-  z-index:99999;
-  pointer-events:none;
-}
-#commentPopup{
+/* ── Comment popup — absolute inside .phone-wrapper, scrolls with card ── */
+.card-popup{
   position:absolute;
-  width:272px;
-  pointer-events:auto;
+  width:260px;
+  display:none;
+  z-index:30;
 }
 .comment-card{
   border:1px solid rgba(52,17,75,.18);border-radius:10px;padding:10px 12px;
@@ -772,6 +766,7 @@ function renderScreen(){
           ${src?`<img src="${src}" class="phone-img" alt="${esc(s.title)}" loading="${eager?'eager':'lazy'}" decoding="async"/>`:'<div style="width:280px;height:560px;background:#f0ecf5;display:flex;align-items:center;justify-content:center;color:#7c6a8a;font-size:.8rem">No image</div>'}
           ${pins}
         </div>
+        <div class="card-popup" id="cpopup-${si}"></div>
         </div>
       <div class="feedback-panel">
         <div class="screen-meta">${esc(s.section)} · Screen ${si+1} of ${screens.length}</div>
@@ -794,16 +789,20 @@ function openFeedback(si,ni){
   var note=screens[si].annotations[ni];if(!note)return;
   setCurrent(si,false);
 
+  // Close any already-open popups
+  closeInline();
+
   // Highlight pin
   document.querySelectorAll('.pin').forEach(function(p){p.classList.remove('active');});
   activePin=ni;
   var pinEl=document.getElementById('pin-'+si+'-'+ni);
   if(pinEl)pinEl.classList.add('active');
 
-  var popup=document.getElementById('commentPopup');
+  var cpopup=document.getElementById('cpopup-'+si);
+  if(!cpopup)return;
 
-  // Build content first so we know the popup height
-  popup.innerHTML='<article class="comment-card">'
+  // Build content
+  cpopup.innerHTML='<article class="comment-card">'
     +'<div class="comment-top"><div>'
     +'<div class="comment-type '+note.type+'">'+(note.type==='content'?'Feature / Content':'UI / UX')+'</div>'
     +'<div class="comment-title">'+esc(note.label)+'</div>'
@@ -812,40 +811,37 @@ function openFeedback(si,ni){
     +'<div class="comment-label">Why</div><div class="comment-copy">'+esc(note.why)+'</div>'
     +'</article>';
 
-  // Show overlay — popup is absolute inside it, so coords are viewport-relative
-  var overlay=document.getElementById('commentOverlay');
-  overlay.style.display='block';
-  popup.style.visibility='hidden';
-  popup.style.left='-9999px';
-  popup.style.top='-9999px';
+  // Measure phone-wrapper size to convert % coords to px
+  var wrapper=document.querySelector('#screen-'+si+' .phone-wrapper');
+  var wW=wrapper?wrapper.offsetWidth:270;
+  var wH=wrapper?wrapper.offsetHeight:500;
 
-  // Measure rendered height
-  var popH=popup.offsetHeight;
-  var vw=window.innerWidth;
-  var vh=window.innerHeight;
+  var pinX=(note.x/100)*wW;
+  var pinY=(note.y/100)*wH;
 
-  var left=20, top=vh/2-popH/2;
-  if(pinEl){
-    var r=pinEl.getBoundingClientRect();
-    left=r.right+14;
-    top=r.top+r.height/2-popH/2;
-    if(left+272>vw-8) left=r.left-272-14;
-    if(top<8) top=8;
-    if(top+popH>vh-8) top=vh-popH-8;
-  }
+  // Show hidden to measure height
+  cpopup.style.display='block';
+  cpopup.style.visibility='hidden';
+  cpopup.style.left='-9999px';
+  var popH=cpopup.offsetHeight;
 
-  popup.style.left=left+'px';
-  popup.style.top=top+'px';
-  popup.style.visibility='visible';
+  // Position right of pin, vertically centred, clamped within wrapper
+  var left=pinX+18;
+  var top=pinY-popH/2;
+  if(top<0)top=4;
+  if(top+popH>wH)top=wH-popH-4;
+
+  cpopup.style.left=left+'px';
+  cpopup.style.top=top+'px';
+  cpopup.style.visibility='visible';
 }
 
 function closeInline(){
   activePin=null;
   document.querySelectorAll('.pin').forEach(function(p){p.classList.remove('active');});
-  var overlay=document.getElementById('commentOverlay');
-  var popup=document.getElementById('commentPopup');
-  if(overlay) overlay.style.display='none';
-  if(popup) popup.innerHTML='';
+  document.querySelectorAll('.card-popup').forEach(function(p){
+    p.style.display='none';p.innerHTML='';
+  });
 }
 
 function closeModal(e){
@@ -953,7 +949,6 @@ document.addEventListener('keydown',e=>{
 });
 </script>
 
-<div id="commentOverlay"><div id="commentPopup"></div></div>
 
 </body>
 </html>
