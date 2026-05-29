@@ -203,7 +203,6 @@ header{
   scroll-behavior:smooth;
   scroll-padding-inline:48px;
   scroll-snap-type:x proximity;
-  contain:layout style
 }
 .screen-viewer::-webkit-scrollbar{height:5px}
 .screen-viewer::-webkit-scrollbar-track{background:var(--surface)}
@@ -276,20 +275,25 @@ header{
 .screen-title-area h2{font-size:1.35rem;font-weight:700;letter-spacing:-.02em;color:var(--text)}
 .empty-state p{font-size:.8rem;color:var(--muted);line-height:1.6;margin-top:6px}
 
-/* ── Inline comment — overlays on phone screen next to pin ── */
-.inline-comment{
-  position:absolute;
-  width:clamp(240px, 75%, 300px);
-  z-index:50;
-  max-height:0;overflow:hidden;opacity:0;pointer-events:none;
-  transition:max-height .28s cubic-bezier(.2,.8,.2,1),opacity .18s ease;
+/* ── Comment popup — fixed to viewport, bypasses all overflow ── */
+#commentPopup{
+  position:fixed;
+  width:260px;
+  z-index:2000;
+  opacity:0;pointer-events:none;
+  transform:translateX(-6px) translateY(-50%);
+  transition:opacity .18s ease,transform .18s ease;
 }
-.inline-comment.open{max-height:600px;opacity:1;pointer-events:auto;overflow-y:auto}
+#commentPopup.open{
+  opacity:1;pointer-events:auto;
+  transform:translateX(0) translateY(-50%);
+}
 .comment-card{
-  position:relative;
-  backdrop-filter:blur(12px);
-  -webkit-backdrop-filter:blur(12px);
-  background:rgba(255,255,255,0.96)
+  border:1px solid rgba(52,17,75,.15);
+  border-radius:10px;padding:12px 14px;
+  background:#fff;
+  box-shadow:0 8px 32px rgba(52,17,75,.14),0 2px 8px rgba(52,17,75,.08);
+  text-align:left;position:relative
 }
 .comment-card{
   border:1px solid rgba(52,17,75,.18);border-radius:10px;padding:10px 12px;
@@ -778,8 +782,7 @@ function renderScreen(){
           ${src?`<img src="${src}" class="phone-img" alt="${esc(s.title)}" loading="${eager?'eager':'lazy'}" decoding="async"/>`:'<div style="width:280px;height:560px;background:#f0ecf5;display:flex;align-items:center;justify-content:center;color:#7c6a8a;font-size:.8rem">No image</div>'}
           ${pins}
         </div>
-        <div class="inline-comment" id="comment-${si}"></div>
-      </div>
+        </div>
       <div class="feedback-panel">
         <div class="screen-meta">${esc(s.section)} · Screen ${si+1} of ${screens.length}</div>
         <div class="screen-title-area"><h2>${esc(s.title)}</h2></div>
@@ -801,50 +804,45 @@ function openFeedback(si,ni){
   const note=screens[si].annotations[ni];if(!note)return;
   setCurrent(si,false);
 
-  // Close all other open comments
-  document.querySelectorAll('.inline-comment').forEach(c=>{
-    if(c.id!==`comment-${si}`){c.classList.remove('open');c.innerHTML='';}
-  });
-
-  // Pin highlights
+  // Highlight pin
   document.querySelectorAll('.pin').forEach(p=>p.classList.remove('active'));
   activePin=ni;
   const pinEl=document.getElementById(`pin-${si}-${ni}`);
   if(pinEl)pinEl.classList.add('active');
 
-  const el=document.getElementById(`comment-${si}`);
+  // Use getBoundingClientRect so popup appears at pin's actual viewport position
+  const popup=document.getElementById('commentPopup');
+  if(pinEl){
+    const r=pinEl.getBoundingClientRect();
+    const vh=window.innerHeight;
+    let top=r.top+r.height/2;
+    // Clamp so popup stays within viewport
+    top=Math.max(60,Math.min(top,vh-180));
+    popup.style.top=top+'px';
+    popup.style.left=(r.right+12)+'px';
+  }
 
-  // Always place comment to the RIGHT of the pin
-  const pinX=note.x;
-  const pinY=Math.max(6,Math.min(note.y,86));
-
-  el.style.top=`${pinY}%`;
-  el.style.transform='translateY(-50%)';
-  el.style.bottom='auto';
-  el.style.left=`${pinX+7}%`;
-  el.style.right='auto';
-
-  el.innerHTML=`<article class="comment-card">
+  popup.innerHTML=`<article class="comment-card">
     <div class="comment-top">
       <div>
         <div class="comment-type ${note.type}">${note.type==='content'?'Feature / Content':'UI / UX'}</div>
         <div class="comment-title">${esc(note.label)}</div>
       </div>
-      <button class="comment-close" type="button" onclick="closeInline(${si})">✕</button>
+      <button class="comment-close" type="button" onclick="closeInline()">✕</button>
     </div>
     <div class="comment-label">What</div>
     <div class="comment-copy">${esc(note.what)}</div>
     <div class="comment-label">Why</div>
     <div class="comment-copy">${esc(note.why)}</div>
   </article>`;
-  el.classList.add('open');
+  popup.classList.add('open');
 }
 
-function closeInline(si){
+function closeInline(){
   activePin=null;
-  document.querySelectorAll(`#screen-${si} .pin`).forEach(p=>p.classList.remove('active'));
-  const c=document.getElementById(`comment-${si}`);
-  if(c){c.classList.remove('open');c.innerHTML='';}
+  document.querySelectorAll('.pin').forEach(p=>p.classList.remove('active'));
+  const popup=document.getElementById('commentPopup');
+  if(popup){popup.classList.remove('open');popup.innerHTML='';}
 }
 
 function closeModal(e){
@@ -854,7 +852,7 @@ function closeModal(e){
 }
 
 function goTo(idx){
-  activePin=null;closeModal();closeInline(currentIdx);
+  activePin=null;closeModal();closeInline();
   setCurrent(idx,true);
   const items=document.querySelectorAll('.nav-item');
   if(items[idx])items[idx].scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -945,12 +943,14 @@ function toggleEye(){
 document.addEventListener('keydown',e=>{
   const open=document.getElementById('feedbackModal').classList.contains('open');
   if(e.key==='Escape'&&open){closeModal();return;}
-  if(e.key==='Escape'&&activePin!==null){closeInline(currentIdx);return;}
+  if(e.key==='Escape'&&activePin!==null){closeInline();return;}
   if(open)return;
   if(e.key==='ArrowRight'||e.key==='ArrowDown')navigate(1);
   if(e.key==='ArrowLeft'||e.key==='ArrowUp')navigate(-1);
 });
 </script>
+
+<div id="commentPopup"></div>
 
 <div class="corner-logo">
   <img src="Logo.jpeg" alt=""/>
