@@ -882,7 +882,7 @@ function setupScroll(){
         const d=Math.abs((r.left+r.width/2)-cx);
         if(d<bestD){bestD=d;best=Number(card.dataset.screenIndex);}
       });
-      if(best!==currentIdx)setCurrent(best,false);
+      if(best!==currentIdx){closeInline();setCurrent(best,false);}
       tick=false;
     });
   },{passive:true});
