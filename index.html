@@ -11,10 +11,9 @@
 #gate{
   position:fixed;inset:0;z-index:9999;
   display:flex;align-items:center;justify-content:center;
-  background:rgba(255,255,255,1);
-  transition:opacity .7s cubic-bezier(.4,0,.2,1),visibility .7s;
+  background:#fff;
+  opacity:1;
 }
-#gate.unlocked{opacity:0;visibility:hidden;pointer-events:none}
 
 .gate-card{
   display:flex;flex-direction:column;align-items:center;gap:28px;
@@ -56,8 +55,7 @@
   color:#1a0b24;background:rgba(255,255,255,0.9);
   outline:none;
   transition:border-color .18s,box-shadow .18s;
-  letter-spacing:.04em;
-  -webkit-text-security:disc;
+  letter-spacing:.02em;
 }
 #pwInput::placeholder{letter-spacing:.01em;color:#b8a8c8}
 #pwInput:focus{
@@ -398,8 +396,7 @@ header{
     <p class="gate-hint">Enter password to continue</p>
     <div class="gate-input-wrap">
       <input id="pwInput" type="password" placeholder="Password"
-        autocomplete="current-password" spellcheck="false"
-        onkeydown="if(event.key==='Enter')unlock()"/>
+        autocomplete="off" spellcheck="false"/>
       <button class="eye-btn" type="button" onclick="toggleEye()" tabindex="-1" aria-label="Show password">
         <svg id="eyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
@@ -890,42 +887,57 @@ function setupScroll(){
 renderScreen();setCurrent(0,false);setupScroll();
 
 // ── Password gate ────────────────────────────────────────────
-(function(){
-  // Focus input on load
-  window.addEventListener('load',()=>document.getElementById('pwInput').focus());
-})();
+// Focus on load + Enter key
+document.addEventListener('DOMContentLoaded',function(){
+  var el=document.getElementById('pwInput');
+  if(el){
+    setTimeout(function(){el.focus();},100);
+    el.addEventListener('keydown',function(e){
+      if(e.key==='Enter') unlock();
+    });
+  }
+});
 
 function unlock(){
-  const val=document.getElementById('pwInput').value;
-  const err=document.getElementById('gateErr');
+  var input=document.getElementById('pwInput');
+  var err=document.getElementById('gateErr');
+  var gate=document.getElementById('gate');
+  if(!input||!gate)return;
+
+  var val=input.value;
   if(val==='kurate2026'){
-    const gate=document.getElementById('gate');
+    // Hide error, start fade
     err.style.opacity='0';
-    gate.classList.add('unlocked');
-    // After transition completes, remove from DOM so it can't be re-shown
-    gate.addEventListener('transitionend',()=>gate.remove(),{once:true});
+    gate.style.transition='opacity 0.65s cubic-bezier(.4,0,.2,1)';
+    gate.style.opacity='0';
+    gate.style.pointerEvents='none';
+    // Remove from DOM after fade completes
+    setTimeout(function(){
+      gate.style.display='none';
+    },700);
   } else {
-    const input=document.getElementById('pwInput');
+    // Wrong password — shake + red border
     input.classList.remove('shake','error');
-    // Force reflow to restart animation
-    void input.offsetWidth;
+    void input.offsetWidth; // force reflow to restart animation
     input.classList.add('shake','error');
     err.style.opacity='1';
     input.value='';
     input.focus();
-    setTimeout(()=>input.classList.remove('error'),1200);
+    setTimeout(function(){
+      input.classList.remove('error');
+    },1400);
   }
 }
 
-let eyeVisible=false;
+var eyeVisible=false;
 function toggleEye(){
   eyeVisible=!eyeVisible;
-  const inp=document.getElementById('pwInput');
+  var inp=document.getElementById('pwInput');
   inp.type=eyeVisible?'text':'password';
-  const icon=document.getElementById('eyeIcon');
+  var icon=document.getElementById('eyeIcon');
   icon.innerHTML=eyeVisible
-    ?`<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`
-    :`<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+    ?'<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'
+    :'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
 }
 // ── End gate ─────────────────────────────────────────────────
 
